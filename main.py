@@ -48,9 +48,12 @@ def get_files():
     files = []
     for filename in os.listdir(UPLOAD_FOLDER):
         if allowed_file(filename) or filename.endswith('.txt'):
-            files.append(filename)
+            # Skip temporary or duplicate files
+            if not filename.startswith('temp_'):
+                files.append(filename)
     files.sort(reverse=True)
     return files
+
 
 @app.route('/')
 def index():
@@ -72,16 +75,22 @@ def upload_audio():
         print("No file selected")
         return "No file selected", 400
 
-    # Save the uploaded audio file
-    filename = datetime.now().strftime("%Y%m%d-%I%M%S%p") + '.wav'
-    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    file.save(file_path)
-    print(f"Saved file: {file_path}")
+    # Save the uploaded audio file temporarily
+    temp_filename = datetime.now().strftime("%Y%m%d-%I%M%S%p") + '_temp.wav'
+    temp_file_path = os.path.join(app.config['UPLOAD_FOLDER'], temp_filename)
+    file.save(temp_file_path)
+    print(f"Saved temporary file: {temp_file_path}")
 
-    # Convert and transcribe the audio
-    converted_file_path = os.path.join(app.config['UPLOAD_FOLDER'], f"converted_{filename}")
-    convert_to_16000hz(file_path, converted_file_path)
+    # Convert the file to the required format
+    converted_filename = datetime.now().strftime("%Y%m%d-%I%M%S%p") + '.wav'
+    converted_file_path = os.path.join(app.config['UPLOAD_FOLDER'], converted_filename)
+    convert_to_16000hz(temp_file_path, converted_file_path)
 
+    # Remove the temporary file
+    os.remove(temp_file_path)
+    print(f"Removed temporary file: {temp_file_path}")
+
+    # Transcribe the converted audio
     try:
         transcript = transcribe_audio(converted_file_path)
         if transcript:
@@ -93,6 +102,8 @@ def upload_audio():
         return f"Error during transcription: {e}", 500
 
     return "Uploaded and transcribed successfully (Check console for transcription result)", 200
+
+
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
